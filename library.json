@@ -1,8 +1,8 @@
 {
   "name": "Platform_IO_Libs",
   "version": "2.0.0",
-  "description": "Collection of ESP32 libraries: LatchController (universal latch abstraction), ESP32_RelayController (deprecated)",
-  "keywords": ["esp32", "latch", "relay", "74hc595", "74hc373", "gpio-expander"],
+  "description": "Collection of ESP32 libraries: LatchController, ESP32_AsyncWebController",
+  "keywords": ["esp32", "latch", "relay", "74hc595", "webserver", "async"],
   "authors": [
     {
       "name": "Theo",
@@ -16,10 +16,13 @@
   "license": "MIT",
   "frameworks": "arduino",
   "platforms": "espressif32",
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^7.0.0"
+  },
   "export": {
     "include": [
-      "LatchController",
-      "ESP32_RelayController"
+      "LatchController/*",
+      "ESP32_AsyncWebController/*"
     ]
   }
 }

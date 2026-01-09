@@ -211,7 +211,7 @@ void ESP32_AsyncWebController::handleWebSocketEvent(
       JsonDocument doc;
       DeserializationError error = deserializeJson(doc, message);
       
-      if (!error && doc.containsKey("channel") && doc.containsKey("state")) {
+      if (!error && doc["channel"].is<uint8_t>() && doc["state"].is<bool>()) {
         uint8_t channel = doc["channel"];
         bool state = doc["state"];
         
@@ -500,27 +500,26 @@ String ESP32_AsyncWebController::generateHTML() {
         }
 
         function updateUI() {
-            const container = document.getElementById('channels');
-            container.innerHTML = '';
+            const container = document.getElementById("channels");
+            container.innerHTML = "";
             
             for (let i = 0; i < maxChannels; i++) {
                 const state = states[i] || false;
-                const div = document.createElement('div');
-                div.className = 'channel';
-                div.innerHTML = `
-                    <div class="channel-name">Channel ${i}</div>
-                    <button id="btn-${i}" class="toggle-btn ${state ? 'on' : 'off'}" 
-                            onclick="toggleOutput(${i})">
-                        ${state ? 'ON' : 'OFF'}
-                    </button>
-                `;
+                const div = document.createElement("div");
+                div.className = "channel";
+                div.innerHTML = 
+                    "<div class=\"channel-name\">Channel " + i + "</div>" +
+                    "<button id=\"btn-" + i + "\" class=\"toggle-btn " + (state ? "on" : "off") + "\" " +
+                            "onclick=\"toggleOutput(" + i + ")\">" +
+                        (state ? "ON" : "OFF") +
+                    "</button>";
                 container.appendChild(div);
             }
         }
 
         // Initialize
         initWebSocket();
-        fetch('/api/states')
+        fetch("/api/states")
             .then(response => response.json())
             .then(data => {
                 states = data.channels || {};

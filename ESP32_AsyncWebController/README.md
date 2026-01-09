@@ -18,9 +18,9 @@ Eine saubere, generische Bibliothek für die Steuerung von ESP32-Ausgängen übe
 
 ```ini
 lib_deps = 
-    me-no-dev/ESP Async WebServer
-    me-no-dev/AsyncTCP
-    bblanchon/ArduinoJson
+    https://github.com/mathieucarbou/ESPAsyncWebServer.git#v3.3.21
+    https://github.com/mathieucarbou/AsyncTCP.git#v3.2.14
+    bblanchon/ArduinoJson@^7.0.0
 ```
 
 Kopiere die Library in dein `lib/` Verzeichnis oder nutze einen Symlink.
