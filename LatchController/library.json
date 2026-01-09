@@ -1,0 +1,38 @@
+{
+  "name": "LatchController",
+  "version": "2.0.0",
+  "description": "Universal abstraction library for controlling various latch ICs (shift registers, D-latches, I2C expanders) with FreeRTOS support",
+  "keywords": [
+    "esp32",
+    "latch",
+    "d-latch",
+    "74hc595",
+    "74hc373",
+    "74hc75",
+    "shift-register",
+    "freertos",
+    "multicore",
+    "gpio-expander"
+  ],
+  "authors": [
+    {
+      "name": "Theo",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MROutake/Platform-IO-LIBS.git"
+  },
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "export": {
+    "include": [
+      "LatchController.h",
+      "LatchController.cpp",
+      "drivers/*.h",
+      "drivers/*.cpp"
+    ]
+  }
+}

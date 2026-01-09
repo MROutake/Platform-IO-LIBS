@@ -4,11 +4,17 @@ Private collection of reusable PlatformIO libraries for ESP32 projects.
 
 ## Libraries
 
-### ESP32_RelayController
-Thread-safe relay control via 74HC595 shift register with FreeRTOS support.
-- **Version:** 1.0.0
+### LatchController ⭐ NEW v2.0
+Universal abstraction library for controlling latch ICs.
+- **Version:** 2.0.0
 - **Platform:** ESP32
-- **Features:** Multi-core safe, configurable pins, HIGH/LOW trigger modes
+- **Supported ICs:** 74HC595, 74HC373, 74HC164, 74HC75, CD4042
+- **Features:** Driver architecture, thread-safe, extensible, up to 32 channels
+
+### ESP32_RelayController (deprecated)
+Legacy relay controller for 74HC595. Use `LatchController` with `ShiftRegisterDriver` instead.
+- **Version:** 1.0.0
+- **Status:** ⚠️ Replaced by LatchController
 
 ## Usage in Projects
 
