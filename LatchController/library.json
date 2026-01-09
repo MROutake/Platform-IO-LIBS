@@ -1,22 +1,20 @@
 {
   "name": "LatchController",
-  "version": "2.0.0",
-  "description": "Universal abstraction library for controlling various latch ICs (shift registers, D-latches, I2C expanders) with FreeRTOS support",
+  "version": "3.0.0",
+  "description": "Professional industrial-grade library for controlling latch ICs (shift registers, D-latches) with FreeRTOS support",
   "keywords": [
     "esp32",
     "latch",
-    "d-latch",
     "74hc595",
     "74hc373",
-    "74hc75",
     "shift-register",
+    "relay",
     "freertos",
-    "multicore",
-    "gpio-expander"
+    "gpio"
   ],
   "authors": [
     {
-      "name": "Theo",
+      "name": "MROutake",
       "maintainer": true
     }
   ],

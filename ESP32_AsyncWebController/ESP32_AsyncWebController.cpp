@@ -1,28 +1,40 @@
+/**
+ * @file ESP32_AsyncWebController.cpp
+ * @brief Professional Async Web Controller Implementation
+ * @version 2.0.0
+ */
+
 #include "ESP32_AsyncWebController.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
 // ============================================================
-// Konstruktor & Destruktor
+// Constructor / Destructor
 // ============================================================
 
 ESP32_AsyncWebController::ESP32_AsyncWebController(uint16_t port, uint8_t maxChannels)
-  : _port(port)
-  , _maxChannels(maxChannels)
-  , _systemName("ESP32 Controller")
-  , _corsEnabled(false)
-  , _controlCallback(nullptr)
-  , _stateCallback(nullptr)
-  , _allStatesCallback(nullptr)
-  , _htmlCallback(nullptr)  // NEU: HTML-Callback initialisieren
+    : _port(port)
+    , _maxChannels(maxChannels)
+    , _systemName("ESP32 Controller")
+    , _corsEnabled(false)
+    , _controlCallback(nullptr)
+    , _stateCallback(nullptr)
+    , _allStatesCallback(nullptr)
+    , _htmlCallback(nullptr)
 {
-  _server = new AsyncWebServer(_port);
-  _ws = new AsyncWebSocket("/ws");
+    _server = new AsyncWebServer(_port);
+    _ws = new AsyncWebSocket("/ws");
 }
 
 ESP32_AsyncWebController::~ESP32_AsyncWebController() {
-  delete _ws;
-  delete _server;
+    if (_ws != nullptr) {
+        delete _ws;
+        _ws = nullptr;
+    }
+    if (_server != nullptr) {
+        delete _server;
+        _server = nullptr;
+    }
 }
 
 // ============================================================
@@ -30,79 +42,78 @@ ESP32_AsyncWebController::~ESP32_AsyncWebController() {
 // ============================================================
 
 bool ESP32_AsyncWebController::startAP(const char* ssid, const char* password) {
-  WiFi.mode(WIFI_AP);
-  bool success = false;
-  
-  if (strlen(password) > 0) {
-    success = WiFi.softAP(ssid, password);
-  } else {
-    success = WiFi.softAP(ssid);
-  }
-  
-  if (success) {
-    Serial.printf("[WebController] AP started: %s\n", ssid);
-    Serial.printf("[WebController] IP Address: %s\n", WiFi.softAPIP().toString().c_str());
-  } else {
-    Serial.println("[WebController] Failed to start AP!");
-  }
-  
-  return success;
+    WiFi.mode(WIFI_AP);
+    
+    bool success = false;
+    if (strlen(password) > 0) {
+        success = WiFi.softAP(ssid, password);
+    } else {
+        success = WiFi.softAP(ssid);
+    }
+    
+    if (success) {
+        Serial.printf("[WebController] AP started: %s\n", ssid);
+        Serial.printf("[WebController] IP: %s\n", WiFi.softAPIP().toString().c_str());
+    } else {
+        Serial.println("[WebController] ERROR: Failed to start AP!");
+    }
+    
+    return success;
 }
 
 bool ESP32_AsyncWebController::connectWiFi(const char* ssid, const char* password, uint32_t timeoutMs) {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  
-  Serial.printf("[WebController] Connecting to WiFi: %s", ssid);
-  
-  uint32_t startTime = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - startTime) < timeoutMs) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-  
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("[WebController] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    return true;
-  } else {
-    Serial.println("[WebController] Connection failed!");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    
+    Serial.printf("[WebController] Connecting to: %s", ssid);
+    
+    uint32_t startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - startTime) < timeoutMs) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println();
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("[WebController] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        return true;
+    }
+    
+    Serial.println("[WebController] ERROR: Connection failed!");
     return false;
-  }
 }
 
 String ESP32_AsyncWebController::getIP() const {
-  if (WiFi.getMode() == WIFI_AP) {
-    return WiFi.softAPIP().toString();
-  } else {
+    if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) {
+        return WiFi.softAPIP().toString();
+    }
     return WiFi.localIP().toString();
-  }
 }
 
 // ============================================================
-// Server Configuration
+// Callback Configuration
 // ============================================================
 
 void ESP32_AsyncWebController::setCallbacks(
-  OutputControlCallback controlCallback,
-  OutputStateCallback stateCallback,
-  GetAllStatesCallback allStatesCallback
+    OutputControlCallback controlCallback,
+    OutputStateCallback stateCallback,
+    GetAllStatesCallback allStatesCallback
 ) {
-  _controlCallback = controlCallback;
-  _stateCallback = stateCallback;
-  _allStatesCallback = allStatesCallback;
+    _controlCallback = controlCallback;
+    _stateCallback = stateCallback;
+    _allStatesCallback = allStatesCallback;
 }
 
 void ESP32_AsyncWebController::setHTMLGenerator(GetHTMLCallback htmlCallback) {
-  _htmlCallback = htmlCallback;
+    _htmlCallback = htmlCallback;
 }
 
 void ESP32_AsyncWebController::setSystemName(const char* name) {
-  _systemName = String(name);
+    _systemName = String(name);
 }
 
 void ESP32_AsyncWebController::enableCORS(bool enable) {
-  _corsEnabled = enable;
+    _corsEnabled = enable;
 }
 
 // ============================================================
@@ -110,30 +121,31 @@ void ESP32_AsyncWebController::enableCORS(bool enable) {
 // ============================================================
 
 void ESP32_AsyncWebController::begin() {
-  // WebSocket Setup
-  setupWebSocket();
-  _server->addHandler(_ws);
-  
-  // Routes Setup
-  setupRoutes();
-  
-  // CORS Header
-  if (_corsEnabled) {
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
-  }
-  
-  // 404 Handler
-  _server->onNotFound([this](AsyncWebServerRequest* request) {
-    handleNotFound(request);
-  });
-  
-  // Server starten
-  _server->begin();
-  Serial.printf("[WebController] Server started on port %d\n", _port);
-  Serial.printf("[WebController] System: %s\n", _systemName.c_str());
-  Serial.printf("[WebController] Channels: %d\n", _maxChannels);
+    // WebSocket setup
+    setupWebSocket();
+    _server->addHandler(_ws);
+    
+    // Routes setup
+    setupRoutes();
+    
+    // CORS headers
+    if (_corsEnabled) {
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+    
+    // 404 handler
+    _server->onNotFound([this](AsyncWebServerRequest* request) {
+        handleNotFound(request);
+    });
+    
+    // Start server
+    _server->begin();
+    
+    Serial.printf("[WebController] Server started on port %d\n", _port);
+    Serial.printf("[WebController] System: %s\n", _systemName.c_str());
+    Serial.printf("[WebController] Channels: %d\n", _maxChannels);
 }
 
 // ============================================================

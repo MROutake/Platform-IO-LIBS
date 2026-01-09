@@ -1,26 +1,25 @@
 {
   "name": "ESP32_AsyncWebController",
-  "version": "1.0.0",
-  "description": "Generic AsyncWebServer library for ESP32 output control with clean API, WebSocket support and RESTful JSON endpoints",
+  "version": "2.0.0",
+  "description": "Professional async webserver library for ESP32 output control with REST API and WebSocket support",
   "keywords": [
     "esp32",
     "webserver",
     "async",
-    "control",
     "rest-api",
     "websocket",
     "relay",
-    "output"
+    "control"
   ],
   "authors": [
     {
-      "name": "Your Name",
-      "email": "your.email@example.com"
+      "name": "MROutake",
+      "maintainer": true
     }
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/ESP32_AsyncWebController.git"
+    "url": "https://github.com/MROutake/Platform-IO-LIBS.git"
   },
   "license": "MIT",
   "frameworks": "arduino",

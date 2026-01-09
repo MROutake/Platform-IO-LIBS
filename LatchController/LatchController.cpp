@@ -1,85 +1,100 @@
 /**
  * @file LatchController.cpp
- * @brief Implementierung der abstrakten Latch-Controller Library
+ * @brief Professional Latch Controller Implementation
+ * @version 3.0.0
  */
 
 #include "LatchController.h"
 
-// ==================== LatchController ====================
+// ============================================================
+// LatchController Implementation
+// ============================================================
 
-LatchController::LatchController(LatchDriver* drv, uint8_t channels) {
-    driver = drv;
-    channelCount = channels;
-    currentState = 0;
-    triggerMode = ACTIVE_HIGH;
-    initialized = false;
-    lock = NULL;
+LatchController::LatchController(LatchDriver* drv, uint8_t channels) 
+    : driver(drv)
+    , channelCount(min(channels, (uint8_t)32))  // Max 32 channels
+    , currentState(0)
+    , triggerMode(ACTIVE_HIGH)
+    , initialized(false)
+    , lock(nullptr)
+{
 }
 
 LatchController::~LatchController() {
-    if (lock) {
+    if (lock != nullptr) {
         vSemaphoreDelete(lock);
+        lock = nullptr;
     }
 }
 
 bool LatchController::begin(LatchTriggerMode mode) {
-    if (!driver) {
-        Serial.println("✗ Fehler: Kein Driver gesetzt!");
+    // Validate driver
+    if (driver == nullptr) {
+        Serial.println("[LatchController] ERROR: No driver attached!");
         return false;
     }
 
-    // Mutex erstellen
-    if (lock == NULL) {
+    // Create mutex if not exists
+    if (lock == nullptr) {
         lock = xSemaphoreCreateMutex();
+        if (lock == nullptr) {
+            Serial.println("[LatchController] ERROR: Failed to create mutex!");
+            return false;
+        }
     }
 
-    // Trigger-Modus setzen
     triggerMode = mode;
 
-    // Driver initialisieren
+    // Initialize driver
     if (!driver->init()) {
-        Serial.println("✗ Fehler: Driver-Initialisierung fehlgeschlagen!");
+        Serial.println("[LatchController] ERROR: Driver init failed!");
         return false;
     }
 
-    // Alle Latches ausschalten
+    // Set all outputs OFF (considering trigger mode)
     currentState = 0;
-    driver->updateHardware(currentState, channelCount);
+    uint32_t outputData = (triggerMode == ACTIVE_LOW) ? ~currentState : currentState;
+    driver->updateHardware(outputData, channelCount);
 
     initialized = true;
 
-    Serial.println("✓ LatchController initialisiert");
-    Serial.printf("  - Driver: %s\n", driver->getName());
-    Serial.printf("  - Kanäle: %d\n", channelCount);
-    Serial.printf("  - Trigger-Modus: %s\n", 
-                  triggerMode == ACTIVE_HIGH ? "ACTIVE_HIGH" : "ACTIVE_LOW");
+    Serial.println("[LatchController] Initialized successfully");
+    Serial.printf("  Driver:   %s\n", driver->getName());
+    Serial.printf("  Channels: %d\n", channelCount);
+    Serial.printf("  Mode:     %s\n", triggerMode == ACTIVE_HIGH ? "ACTIVE_HIGH" : "ACTIVE_LOW");
 
     return true;
 }
 
 void LatchController::takeLock() {
-    if (lock) xSemaphoreTake(lock, portMAX_DELAY);
+    if (lock != nullptr) {
+        xSemaphoreTake(lock, portMAX_DELAY);
+    }
 }
 
 void LatchController::giveLock() {
-    if (lock) xSemaphoreGive(lock);
+    if (lock != nullptr) {
+        xSemaphoreGive(lock);
+    }
 }
 
 bool LatchController::setLatch(uint8_t channel, bool state) {
     if (channel >= channelCount) {
-        Serial.printf("✗ Fehler: Kanal %d ungültig (0-%d)\n", channel, channelCount - 1);
+        Serial.printf("[LatchController] ERROR: Invalid channel %d (max: %d)\n", 
+                      channel, channelCount - 1);
         return false;
     }
 
     takeLock();
 
+    // Update internal logical state
     if (state) {
-        currentState |= (1UL << channel);  // Bit setzen
+        currentState |= (1UL << channel);
     } else {
-        currentState &= ~(1UL << channel); // Bit löschen
+        currentState &= ~(1UL << channel);
     }
 
-    // Bei ACTIVE_LOW: Logik invertieren
+    // Apply hardware inversion for ACTIVE_LOW
     uint32_t outputData = (triggerMode == ACTIVE_LOW) ? ~currentState : currentState;
     driver->updateHardware(outputData, channelCount);
 
@@ -88,21 +103,26 @@ bool LatchController::setLatch(uint8_t channel, bool state) {
 }
 
 bool LatchController::setLatchOn(uint8_t channel) {
+    // Logical ON = state true
+    // Hardware inversion is handled in setLatch()
     return setLatch(channel, true);
 }
 
 bool LatchController::setLatchOff(uint8_t channel) {
+    // Logical OFF = state false
+    // Hardware inversion is handled in setLatch()
     return setLatch(channel, false);
 }
 
 bool LatchController::toggleLatch(uint8_t channel) {
     if (channel >= channelCount) {
-        Serial.printf("✗ Fehler: Kanal %d ungültig (0-%d)\n", channel, channelCount - 1);
+        Serial.printf("[LatchController] ERROR: Invalid channel %d\n", channel);
         return false;
     }
 
     takeLock();
-    currentState ^= (1UL << channel);  // Bit toggeln
+    
+    currentState ^= (1UL << channel);
     
     uint32_t outputData = (triggerMode == ACTIVE_LOW) ? ~currentState : currentState;
     driver->updateHardware(outputData, channelCount);
@@ -114,7 +134,7 @@ bool LatchController::toggleLatch(uint8_t channel) {
 void LatchController::setAllLatches(uint32_t mask) {
     takeLock();
     
-    // Maske auf channelCount begrenzen
+    // Limit mask to valid channels
     uint32_t channelMask = (1UL << channelCount) - 1;
     currentState = mask & channelMask;
     
@@ -125,20 +145,21 @@ void LatchController::setAllLatches(uint32_t mask) {
 }
 
 void LatchController::setAllOn() {
-    uint32_t mask = (1UL << channelCount) - 1;  // Alle Bits setzen
+    uint32_t mask = (1UL << channelCount) - 1;
     setAllLatches(mask);
-    Serial.println("→ Alle Latches EIN");
+    Serial.println("[LatchController] All latches ON");
 }
 
 void LatchController::setAllOff() {
     setAllLatches(0);
-    Serial.println("→ Alle Latches AUS");
+    Serial.println("[LatchController] All latches OFF");
 }
 
 bool LatchController::getLatchState(uint8_t channel) {
     if (channel >= channelCount) {
         return false;
     }
+    // Return logical state (not hardware state)
     return (currentState & (1UL << channel)) != 0;
 }
 
@@ -153,15 +174,16 @@ uint8_t LatchController::getChannelCount() {
 void LatchController::setTriggerMode(LatchTriggerMode mode) {
     if (triggerMode != mode) {
         takeLock();
+        
         triggerMode = mode;
         
-        // Zustand sofort aktualisieren
+        // Update hardware with new mode
         uint32_t outputData = (triggerMode == ACTIVE_LOW) ? ~currentState : currentState;
         driver->updateHardware(outputData, channelCount);
         
         giveLock();
         
-        Serial.printf("→ Trigger-Modus geändert: %s\n", 
+        Serial.printf("[LatchController] Trigger mode: %s\n", 
                       mode == ACTIVE_HIGH ? "ACTIVE_HIGH" : "ACTIVE_LOW");
     }
 }
@@ -171,24 +193,24 @@ bool LatchController::isInitialized() {
 }
 
 void LatchController::printDebugInfo() {
-    Serial.println("\n╔════════════════════════════════════════════╗");
-    Serial.println("║   Latch Controller Status                  ║");
-    Serial.println("╠════════════════════════════════════════════╣");
-    Serial.printf("║ Driver:            %-20s ║\n", driver ? driver->getName() : "KEIN");
-    Serial.printf("║ Initialisiert:     %-20s ║\n", initialized ? "✓ JA" : "✗ NEIN");
-    Serial.printf("║ Kanäle:            %-20d ║\n", channelCount);
-    Serial.printf("║ Trigger-Modus:     %-20s ║\n", 
+    Serial.println();
+    Serial.println("╔══════════════════════════════════════════╗");
+    Serial.println("║       LatchController v3.0.0             ║");
+    Serial.println("╠══════════════════════════════════════════╣");
+    Serial.printf("║ Driver:      %-26s ║\n", driver ? driver->getName() : "NONE");
+    Serial.printf("║ Initialized: %-26s ║\n", initialized ? "Yes" : "No");
+    Serial.printf("║ Channels:    %-26d ║\n", channelCount);
+    Serial.printf("║ Mode:        %-26s ║\n", 
                   triggerMode == ACTIVE_HIGH ? "ACTIVE_HIGH" : "ACTIVE_LOW");
-    Serial.println("╠════════════════════════════════════════════╣");
-    Serial.printf("║ Aktueller Zustand: 0x%08X             ║\n", currentState);
-    Serial.println("╠════════════════════════════════════════════╣");
-    Serial.println("║ Latch-Kanäle:                              ║");
+    Serial.printf("║ State:       0x%08X                 ║\n", currentState);
+    Serial.println("╠══════════════════════════════════════════╣");
     
     for (uint8_t i = 0; i < channelCount; i++) {
         bool state = getLatchState(i);
-        Serial.printf("║   Kanal %2d:        %s                   ║\n", 
-                      i, state ? "🟢 EIN " : "⚫ AUS");
+        Serial.printf("║ Channel %2d:  %s                       ║\n", 
+                      i, state ? "ON " : "OFF");
     }
     
-    Serial.println("╚════════════════════════════════════════════╝\n");
+    Serial.println("╚══════════════════════════════════════════╝");
+    Serial.println();
 }

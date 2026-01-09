@@ -1,250 +1,215 @@
-# ESP32 AsyncWebController
+# ESP32_AsyncWebController v2.0.0
 
-Eine saubere, generische Bibliothek für die Steuerung von ESP32-Ausgängen über einen AsyncWebServer mit klarer API.
+Professional async webserver library for ESP32 output control.
 
-## ✨ Features
+## Features
 
-- **Clean API**: Einfache Integration über Callbacks
-- **RESTful JSON API**: Standardisierte HTTP-Endpunkte
-- **WebSocket Support**: Echtzeit-Updates ohne Polling
-- **Responsive Web-UI**: Modernes HTML-Interface inkludiert
-- **WiFi Flexibilität**: AP oder Station Mode
-- **CORS Support**: Für externe Web-Apps
-- **Framework-agnostisch**: Funktioniert mit jeder Output-Logik
+- **RESTful JSON API** - Standard HTTP endpoints for control
+- **WebSocket** - Real-time bidirectional updates
+- **Custom HTML Interface** - Project defines the UI via callback
+- **WiFi AP & Station Mode** - Access Point or connect to existing network
+- **CORS Support** - Enable cross-origin requests
+- **Custom Routes** - Extend with your own endpoints
 
-## 📦 Installation
+## Installation
 
 ### PlatformIO
-
 ```ini
 lib_deps = 
-    https://github.com/mathieucarbou/ESPAsyncWebServer.git#v3.3.21
-    https://github.com/mathieucarbou/AsyncTCP.git#v3.2.14
-    bblanchon/ArduinoJson@^7.0.0
+    https://github.com/MROutake/Platform-IO-LIBS.git#ESP32_AsyncWebController
+    mathieucarbou/ESPAsyncWebServer @ ^3.3.21
+    mathieucarbou/AsyncTCP @ ^3.2.14
+    bblanchon/ArduinoJson @ ^7.2.1
 ```
 
-Kopiere die Library in dein `lib/` Verzeichnis oder nutze einen Symlink.
-
-## 🚀 Schnellstart
+## Quick Start
 
 ```cpp
-#include <Arduino.h>
 #include <ESP32_AsyncWebController.h>
 
-// Webserver erstellen (Port 80, 8 Kanäle)
-ESP32_AsyncWebController web(80, 8);
+ESP32_AsyncWebController webServer(80, 6);  // Port 80, 6 channels
 
-// Beispiel: GPIO-Array für Ausgänge
-const uint8_t outputs[8] = {2, 4, 5, 12, 13, 14, 15, 16};
-bool outputStates[8] = {false};
-
-// Callback: Ausgang setzen
-void setOutput(uint8_t channel, bool state) {
-  if (channel < 8) {
-    outputStates[channel] = state;
-    digitalWrite(outputs[channel], state ? HIGH : LOW);
-    Serial.printf("Output %d -> %s\n", channel, state ? "ON" : "OFF");
-  }
+// Callbacks (implement these based on your hardware)
+void setOutput(uint8_t ch, bool state) {
+    // Control your hardware here
 }
 
-// Callback: Ausgang abfragen
-bool getOutput(uint8_t channel) {
-  return channel < 8 ? outputStates[channel] : false;
+bool getOutput(uint8_t ch) {
+    // Return current state
+    return false;
 }
 
-// Callback: Alle Zustände (JSON)
 String getAllStates() {
-  String json = "{\"channels\":{";
-  for (int i = 0; i < 8; i++) {
-    json += "\"" + String(i) + "\":" + (outputStates[i] ? "true" : "false");
-    if (i < 7) json += ",";
-  }
-  json += "}}";
-  return json;
+    return "{\"channels\":{\"0\":false,\"1\":false}}";
+}
+
+String generateHTML() {
+    return "<html><body><h1>My Interface</h1></body></html>";
 }
 
 void setup() {
-  Serial.begin(115200);
-  
-  // GPIOs initialisieren
-  for (int i = 0; i < 8; i++) {
-    pinMode(outputs[i], OUTPUT);
-    digitalWrite(outputs[i], LOW);
-  }
-  
-  // WiFi Access Point starten
-  web.startAP("ESP32-Control", "12345678");
-  
-  // System-Name setzen
-  web.setSystemName("My ESP32 Controller");
-  
-  // CORS aktivieren (optional)
-  web.enableCORS(true);
-  
-  // Callbacks registrieren
-  web.setCallbacks(setOutput, getOutput, getAllStates);
-  
-  // Server starten
-  web.begin();
-  
-  Serial.println("Setup complete!");
-  Serial.println("Open: http://" + web.getIP());
+    Serial.begin(115200);
+    
+    // Start Access Point
+    webServer.startAP("MyDevice", "password123");
+    
+    // Register callbacks
+    webServer.setCallbacks(setOutput, getOutput, getAllStates);
+    webServer.setHTMLGenerator(generateHTML);
+    
+    // Start server
+    webServer.begin();
 }
 
 void loop() {
-  web.loop(); // WebSocket Cleanup
-  delay(10);
+    webServer.loop();  // Cleanup WebSocket clients
 }
 ```
 
-## 📡 API Endpunkte
+## API Reference
 
-### REST API
+### WiFi Configuration
 
-| Endpunkt | Methode | Parameter | Beschreibung |
-|----------|---------|-----------|--------------|
-| `/` | GET | - | Web-Interface (HTML) |
-| `/api/info` | GET | - | System-Informationen |
-| `/api/states` | GET | - | Alle Kanal-Zustände (JSON) |
-| `/api/status` | GET | `channel` | Status eines Kanals |
-| `/api/output` | POST | `channel`, `state` | Kanal setzen |
-
-### Beispiel-Requests
-
-```bash
-# Status aller Kanäle
-curl http://192.168.4.1/api/states
-
-# Status von Kanal 2
-curl http://192.168.4.1/api/status?channel=2
-
-# Kanal 3 einschalten
-curl -X POST http://192.168.4.1/api/output?channel=3&state=1
-
-# System-Info
-curl http://192.168.4.1/api/info
-```
-
-### WebSocket
-
-**Endpunkt**: `ws://IP/ws`
-
-**Empfangen** (Server → Client):
-```json
-{"channel": 0, "state": true}
-```
-
-**Senden** (Client → Server):
-```json
-{"channel": 0, "state": false}
-```
-
-## 🎯 Integration mit LatchController
-
-```cpp
-#include <LatchController.h>
-#include <ESP32_AsyncWebController.h>
-#include <drivers/ShiftRegisterDriver.h>
-
-ShiftRegisterDriver relayDriver(23, 18, 19);
-LatchController relays(&relayDriver, 8);
-ESP32_AsyncWebController web(80, 8);
-
-void setRelay(uint8_t channel, bool state) {
-  if (state) {
-    relays.setLatchOn(channel);
-  } else {
-    relays.setLatchOff(channel);
-  }
-}
-
-bool getRelay(uint8_t channel) {
-  return relays.getLatchState(channel);
-}
-
-String getAllRelays() {
-  String json = "{\"channels\":{";
-  for (int i = 0; i < 8; i++) {
-    json += "\"" + String(i) + "\":" + (relays.getLatchState(i) ? "true" : "false");
-    if (i < 7) json += ",";
-  }
-  json += "}}";
-  return json;
-}
-
-void setup() {
-  Serial.begin(115200);
-  
-  // Relais initialisieren
-  relays.begin(ACTIVE_LOW);
-  
-  // WiFi starten
-  web.startAP("ESP32-Relays");
-  web.setSystemName("8-Channel Relay Board");
-  web.setCallbacks(setRelay, getRelay, getAllRelays);
-  web.begin();
-}
-
-void loop() {
-  web.loop();
-}
-```
-
-## 🔧 API Referenz
-
-### Konstruktor
-```cpp
-ESP32_AsyncWebController(uint16_t port = 80, uint8_t maxChannels = 8);
-```
-
-### WiFi Methoden
 ```cpp
 bool startAP(const char* ssid, const char* password = "");
 bool connectWiFi(const char* ssid, const char* password, uint32_t timeoutMs = 10000);
 String getIP() const;
 ```
 
-### Konfiguration
+### Callbacks
+
 ```cpp
-void setCallbacks(OutputControlCallback control, OutputStateCallback state, GetAllStatesCallback allStates);
+// Control callback: (channel, state) -> void
+using OutputControlCallback = std::function<void(uint8_t, bool)>;
+
+// State callback: (channel) -> bool
+using OutputStateCallback = std::function<bool(uint8_t)>;
+
+// All states callback: () -> JSON String
+using GetAllStatesCallback = std::function<String()>;
+
+// HTML generator callback: () -> HTML String
+using GetHTMLCallback = std::function<String()>;
+
+void setCallbacks(OutputControlCallback, OutputStateCallback, GetAllStatesCallback);
+void setHTMLGenerator(GetHTMLCallback);
+```
+
+### Server Configuration
+
+```cpp
 void setSystemName(const char* name);
 void enableCORS(bool enable = true);
-```
-
-### Server-Steuerung
-```cpp
 void begin();
 void loop();
+```
+
+### WebSocket
+
+```cpp
 void broadcastStateChange(uint8_t channel, bool state);
+```
+
+### Custom Routes
+
+```cpp
 void addRoute(const char* uri, WebRequestMethod method, ArRequestHandlerFunction handler);
-AsyncWebServer* getServer();
+AsyncWebServer* getServer();  // For advanced configuration
 ```
 
-## 🎨 Anpassung
+## HTTP Endpoints
 
-### Eigene Routes hinzufügen
+| Method | Endpoint | Description | Parameters |
+|--------|----------|-------------|------------|
+| GET | `/` | HTML Interface | - |
+| GET | `/api/status` | Single channel state | `channel` |
+| POST | `/api/output` | Set channel state | `channel`, `state` |
+| GET | `/api/states` | All channel states | - |
+| GET | `/api/info` | System information | - |
+
+### Example Requests
+
+```bash
+# Get single channel status
+curl "http://192.168.4.1/api/status?channel=0"
+
+# Set channel state
+curl -X POST "http://192.168.4.1/api/output?channel=0&state=1"
+
+# Get all states
+curl "http://192.168.4.1/api/states"
+
+# Get system info
+curl "http://192.168.4.1/api/info"
+```
+
+## WebSocket Protocol
+
+Connect to `ws://192.168.4.1/ws`
+
+### Receive Format
+```json
+{"channel": 0, "state": true}
+```
+
+### Send Format
+```json
+{"channel": 0, "state": true}
+```
+
+## FreeRTOS Best Practices
+
+Run this library on **Core 0** (Network/WiFi core):
+
 ```cpp
-web.addRoute("/custom", HTTP_GET, [](AsyncWebServerRequest* request) {
-  request->send(200, "text/plain", "Custom route!");
-});
+void webServerTask(void* param) {
+    webServer.startAP("MyDevice", "password");
+    webServer.begin();
+    
+    for (;;) {
+        webServer.loop();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+void setup() {
+    xTaskCreatePinnedToCore(webServerTask, "WebTask", 8192, NULL, 2, NULL, 0);
+}
 ```
 
-### Direkter Server-Zugriff
-```cpp
-AsyncWebServer* server = web.getServer();
-server->on("/advanced", HTTP_GET, [](AsyncWebServerRequest* request) {
-  // Erweiterte Konfiguration
-});
+## Architecture
+
+This library follows **separation of concerns**:
+
+- **Library** provides: Webserver infrastructure, API endpoints, WebSocket handling
+- **Project** provides: HTML/CSS/JS interface, hardware callbacks
+
+```
+┌─────────────────────────────────────────────┐
+│                  Project                     │
+│  ┌─────────────┐  ┌────────────────────┐   │
+│  │ WebInterface│  │ Hardware Callbacks │   │
+│  │   (HTML)    │  │ (setOutput, etc.)  │   │
+│  └──────┬──────┘  └─────────┬──────────┘   │
+│         │                    │              │
+│  ┌──────┴────────────────────┴──────────┐  │
+│  │      ESP32_AsyncWebController        │  │
+│  │  (REST API, WebSocket, WiFi)         │  │
+│  └──────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
 ```
 
-## 📝 Lizenz
+## Dependencies
 
-MIT License
+- ESPAsyncWebServer (mathieucarbou fork)
+- AsyncTCP
+- ArduinoJson
 
-## 🤝 Contributing
+## Version History
 
-Pull Requests sind willkommen! Für größere Änderungen bitte zuerst ein Issue öffnen.
+- **v2.0.0** - Professional refactor, improved documentation, clean API
+- **v1.0.0** - Initial release
 
-## 📧 Support
+## License
 
-Bei Fragen oder Problemen öffne ein Issue auf GitHub.
+MIT License - See LICENSE file for details.

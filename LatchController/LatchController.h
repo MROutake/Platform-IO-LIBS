@@ -1,19 +1,28 @@
 /**
  * @file LatchController.h
- * @brief Universal Latch Controller Library for ESP32
- * @version 2.0.0
- * @date 2026-01-09
+ * @brief Professional Latch Controller Library for ESP32
+ * @version 3.0.0
+ * @author MROutake
+ * @date 2025
  * 
- * Abstrakte Library zur Steuerung verschiedener Latch-ICs.
- * Unterstützt verschiedene IC-Typen durch austauschbare Driver.
+ * Industrial-grade library for controlling various latch ICs.
+ * Supports multiple IC types through modular driver architecture.
  * 
- * Unterstützte Latch-Typen:
- * - Shift Register (74HC595, 74HC164, etc.)
+ * Supported Latch Types:
+ * - Shift Registers (74HC595, 74HC164, etc.)
  * - Direct D-Latches (74HC373, 74HC75, etc.)
- * - I2C Expander (PCF8574, MCP23017, etc.)
- * - SPI Expander (MCP23S17, etc.)
+ * - I2C Expanders (PCF8574, MCP23017, etc.)
+ * - SPI Expanders (MCP23S17, etc.)
  * 
- * Thread-safe mit FreeRTOS Mutex.
+ * Features:
+ * - Thread-safe with FreeRTOS mutex
+ * - Modular driver architecture
+ * - Supports up to 32 channels
+ * - ACTIVE_HIGH / ACTIVE_LOW hardware support
+ * 
+ * FreeRTOS Best Practice:
+ * - Run GPIO/Hardware tasks on Core 1
+ * - Run Network/WiFi tasks on Core 0
  */
 
 #ifndef LATCH_CONTROLLER_H
@@ -23,172 +32,200 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+// ============================================================
+// Version
+// ============================================================
+#define LATCH_CONTROLLER_VERSION "3.0.0"
+
 // Forward declaration
 class LatchDriver;
 
+// ============================================================
+// Enums
+// ============================================================
+
 /**
  * @enum LatchTriggerMode
- * @brief Definiert die Logik des Latches
+ * @brief Defines the hardware trigger logic
  */
 enum LatchTriggerMode {
-    ACTIVE_HIGH,  // Latch aktiv bei HIGH (Standard für D-Latch)
-    ACTIVE_LOW    // Latch aktiv bei LOW (typisch für Relaismodule)
+    ACTIVE_HIGH,  ///< Standard logic: HIGH = device active
+    ACTIVE_LOW    ///< Inverted logic: LOW = device active (typical for relay modules)
 };
+
+// ============================================================
+// LatchController Class
+// ============================================================
 
 /**
  * @class LatchController
- * @brief Hauptklasse zur abstrakten Steuerung von Latches
+ * @brief Main class for abstract latch control
  * 
- * Diese Klasse bietet eine einheitliche API für verschiedene Latch-ICs.
- * Der konkrete IC-Typ wird über einen austauschbaren Driver definiert.
+ * Thread-safe controller for various latch ICs.
+ * The specific IC type is defined through a modular driver.
+ * 
+ * @note setLatchOn/Off always represent LOGICAL state.
+ *       Hardware inversion for ACTIVE_LOW is handled internally.
  */
 class LatchController {
 private:
-    LatchDriver* driver;              // Pointer zum Hardware-Driver
-    uint8_t channelCount;             // Anzahl der Kanäle
-    uint32_t currentState;            // Aktueller Zustand (32 Bit für bis zu 32 Latches)
-    LatchTriggerMode triggerMode;     // Trigger-Modus
-    bool initialized;                 // Initialisierungsstatus
-    SemaphoreHandle_t lock;           // FreeRTOS mutex
+    LatchDriver* driver;
+    uint8_t channelCount;
+    uint32_t currentState;
+    LatchTriggerMode triggerMode;
+    bool initialized;
+    SemaphoreHandle_t lock;
 
     void takeLock();
     void giveLock();
 
 public:
     /**
-     * @brief Konstruktor
-     * @param driver Hardware-Driver für den IC-Typ
-     * @param channels Anzahl der Kanäle (z.B. 8 für 74HC595)
+     * @brief Constructor
+     * @param driver Hardware driver for the IC type
+     * @param channels Number of channels (e.g., 8 for 74HC595)
      */
     LatchController(LatchDriver* driver, uint8_t channels = 8);
 
     /**
-     * @brief Destruktor
+     * @brief Destructor - cleans up mutex
      */
     ~LatchController();
 
     /**
-     * @brief Initialisiert den Controller
-     * @param mode Trigger-Modus (ACTIVE_HIGH oder ACTIVE_LOW)
-     * @return true bei Erfolg
+     * @brief Initialize the controller
+     * @param mode Trigger mode (ACTIVE_HIGH or ACTIVE_LOW)
+     * @return true on success
      */
     bool begin(LatchTriggerMode mode = ACTIVE_HIGH);
 
+    // ========== Single Channel Control ==========
+
     /**
-     * @brief Setzt ein einzelnes Latch
-     * @param channel Kanal (0 bis channelCount-1)
-     * @param state true = aktiv, false = inaktiv
-     * @return true bei Erfolg
+     * @brief Set a single latch state
+     * @param channel Channel number (0 to channelCount-1)
+     * @param state true = ON (logical), false = OFF (logical)
+     * @return true on success
+     * @note Hardware inversion for ACTIVE_LOW is handled internally
      */
     bool setLatch(uint8_t channel, bool state);
 
     /**
-     * @brief Schaltet ein Latch ein
-     * @param channel Kanal
-     * @return true bei Erfolg
+     * @brief Turn a latch ON (logical state)
+     * @param channel Channel number
+     * @return true on success
      */
     bool setLatchOn(uint8_t channel);
 
     /**
-     * @brief Schaltet ein Latch aus
-     * @param channel Kanal
-     * @return true bei Erfolg
+     * @brief Turn a latch OFF (logical state)
+     * @param channel Channel number
+     * @return true on success
      */
     bool setLatchOff(uint8_t channel);
 
     /**
-     * @brief Toggelt ein Latch
-     * @param channel Kanal
-     * @return true bei Erfolg
+     * @brief Toggle a latch state
+     * @param channel Channel number
+     * @return true on success
      */
     bool toggleLatch(uint8_t channel);
 
+    // ========== Bulk Control ==========
+
     /**
-     * @brief Setzt alle Latches nach Bitmaske
-     * @param mask Bitmaske (Bit 0 = Kanal 0, etc.)
+     * @brief Set all latches from bit mask
+     * @param mask Bit mask (bit 0 = channel 0, etc.)
      */
     void setAllLatches(uint32_t mask);
 
     /**
-     * @brief Schaltet alle Latches ein
+     * @brief Turn all latches ON
      */
     void setAllOn();
 
     /**
-     * @brief Schaltet alle Latches aus
+     * @brief Turn all latches OFF
      */
     void setAllOff();
 
+    // ========== State Query ==========
+
     /**
-     * @brief Liest den Zustand eines Latches
-     * @param channel Kanal
-     * @return true = aktiv, false = inaktiv
+     * @brief Get single latch state (logical)
+     * @param channel Channel number
+     * @return true if ON (logical), false if OFF
      */
     bool getLatchState(uint8_t channel);
 
     /**
-     * @brief Liest alle Latch-Zustände als Bitmaske
-     * @return Bitmaske aller Kanäle
+     * @brief Get all latch states as bit mask (logical)
+     * @return Bit mask of all states
      */
     uint32_t getAllStates();
 
+    // ========== Configuration ==========
+
     /**
-     * @brief Anzahl der verfügbaren Kanäle
-     * @return Anzahl Kanäle
+     * @brief Get channel count
+     * @return Number of configured channels
      */
     uint8_t getChannelCount();
 
     /**
-     * @brief Setzt den Trigger-Modus
-     * @param mode ACTIVE_HIGH oder ACTIVE_LOW
+     * @brief Change trigger mode at runtime
+     * @param mode New trigger mode
      */
     void setTriggerMode(LatchTriggerMode mode);
 
     /**
-     * @brief Prüft ob initialisiert
-     * @return true wenn initialisiert
+     * @brief Check if initialized
+     * @return true if initialized
      */
     bool isInitialized();
 
     /**
-     * @brief Debug-Ausgabe
+     * @brief Print debug information to Serial
      */
     void printDebugInfo();
 };
 
+// ============================================================
+// LatchDriver Interface (Abstract Base Class)
+// ============================================================
+
 /**
  * @class LatchDriver
- * @brief Abstrakte Basisklasse für Hardware-Driver
+ * @brief Abstract base class for hardware drivers
  * 
- * Jeder konkrete IC-Typ (74HC595, 74HC373, etc.) implementiert
- * diese Schnittstelle.
+ * Implement this interface to support new IC types.
  */
 class LatchDriver {
 public:
     virtual ~LatchDriver() {}
 
     /**
-     * @brief Initialisiert die Hardware
-     * @return true bei Erfolg
+     * @brief Initialize the hardware
+     * @return true on success
      */
     virtual bool init() = 0;
 
     /**
-     * @brief Aktualisiert die Hardware mit neuen Werten
-     * @param data Daten für alle Kanäle (Bitmaske)
-     * @param channelCount Anzahl der Kanäle
+     * @brief Update hardware output
+     * @param data Bit pattern to output (already inverted if ACTIVE_LOW)
+     * @param channelCount Number of channels to update
      */
     virtual void updateHardware(uint32_t data, uint8_t channelCount) = 0;
 
     /**
-     * @brief Name des Drivers (für Debug)
-     * @return Driver-Name
+     * @brief Get driver name for debugging
+     * @return Driver name string
      */
     virtual const char* getName() = 0;
 
     /**
-     * @brief Maximale Anzahl Kanäle die dieser Driver unterstützt
-     * @return Max. Kanäle
+     * @brief Get maximum supported channels
+     * @return Maximum channel count
      */
     virtual uint8_t getMaxChannels() = 0;
 };
