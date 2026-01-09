@@ -11,6 +11,7 @@
 using OutputControlCallback = std::function<void(uint8_t channel, bool state)>;
 using OutputStateCallback = std::function<bool(uint8_t channel)>;
 using GetAllStatesCallback = std::function<String()>;
+using GetHTMLCallback = std::function<String()>;  // NEU: Callback für HTML
 
 /**
  * @brief AsyncWebController - Generischer Async Webserver für Output-Steuerung
@@ -21,7 +22,7 @@ using GetAllStatesCallback = std::function<String()>;
  * Features:
  * - JSON-API für RESTful Control
  * - WebSocket für Echtzeit-Updates
- * - Simple HTML-Interface
+ * - Custom HTML-Interface (vom Projekt bereitgestellt)
  * - WiFi AP oder Station Mode
  * - CORS-Support
  */
@@ -81,6 +82,12 @@ public:
     OutputStateCallback stateCallback,
     GetAllStatesCallback allStatesCallback
   );
+  
+  /**
+   * @brief Setze HTML-Generator Callback (vom Projekt bereitgestellt)
+   * @param htmlCallback Callback der HTML-String zurückgibt
+   */
+  void setHTMLGenerator(GetHTMLCallback htmlCallback);
   
   /**
    * @brief Setze System-Name (wird im Web-Interface angezeigt)
@@ -145,6 +152,7 @@ private:
   OutputControlCallback _controlCallback;
   OutputStateCallback _stateCallback;
   GetAllStatesCallback _allStatesCallback;
+  GetHTMLCallback _htmlCallback;  // NEU: HTML-Generator Callback
   
   // Interne Funktionen
   void setupRoutes();
@@ -160,7 +168,6 @@ private:
   void handleNotFound(AsyncWebServerRequest* request);
   
   // Helper
-  String generateHTML();
   bool isChannelValid(uint8_t channel);
 };
 

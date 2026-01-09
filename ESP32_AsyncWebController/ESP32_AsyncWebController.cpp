@@ -14,6 +14,7 @@ ESP32_AsyncWebController::ESP32_AsyncWebController(uint16_t port, uint8_t maxCha
   , _controlCallback(nullptr)
   , _stateCallback(nullptr)
   , _allStatesCallback(nullptr)
+  , _htmlCallback(nullptr)  // NEU: HTML-Callback initialisieren
 {
   _server = new AsyncWebServer(_port);
   _ws = new AsyncWebSocket("/ws");
@@ -90,6 +91,10 @@ void ESP32_AsyncWebController::setCallbacks(
   _controlCallback = controlCallback;
   _stateCallback = stateCallback;
   _allStatesCallback = allStatesCallback;
+}
+
+void ESP32_AsyncWebController::setHTMLGenerator(GetHTMLCallback htmlCallback) {
+  _htmlCallback = htmlCallback;
 }
 
 void ESP32_AsyncWebController::setSystemName(const char* name) {
@@ -229,8 +234,14 @@ void ESP32_AsyncWebController::handleWebSocketEvent(
 // ============================================================
 
 void ESP32_AsyncWebController::handleRoot(AsyncWebServerRequest* request) {
-  String html = generateHTML();
-  request->send(200, "text/html", html);
+  if (_htmlCallback) {
+    // HTML vom Projekt abrufen
+    String html = _htmlCallback();
+    request->send(200, "text/html", html);
+  } else {
+    // Fallback wenn kein HTML-Generator gesetzt
+    request->send(500, "text/plain", "No HTML generator configured. Use setHTMLGenerator() to provide custom HTML.");
+  }
 }
 
 void ESP32_AsyncWebController::handleGetStatus(AsyncWebServerRequest* request) {
@@ -337,198 +348,4 @@ void ESP32_AsyncWebController::addRoute(const char* uri, WebRequestMethod method
 
 bool ESP32_AsyncWebController::isChannelValid(uint8_t channel) {
   return channel < _maxChannels;
-}
-
-String ESP32_AsyncWebController::generateHTML() {
-  String html = R"(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>)" + _systemName + R"(</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        .info {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .channels {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .channel {
-            background: #f5f5f5;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s;
-        }
-        .channel:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .channel-name {
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        .toggle-btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-        }
-        .toggle-btn.on {
-            background: #4CAF50;
-            color: white;
-        }
-        .toggle-btn.off {
-            background: #f44336;
-            color: white;
-        }
-        .toggle-btn:hover {
-            opacity: 0.9;
-            transform: scale(1.05);
-        }
-        .status {
-            margin-top: 10px;
-            font-size: 12px;
-            color: #666;
-        }
-        .connection-status {
-            text-align: center;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎛️ )" + _systemName + R"(</h1>
-        <div class="info">
-            IP: <strong>)" + getIP() + R"(</strong> | 
-            Channels: <strong>)" + String(_maxChannels) + R"(</strong>
-        </div>
-        <div id="wsStatus" class="connection-status disconnected">
-            ⚠️ Disconnected
-        </div>
-        <div class="channels" id="channels"></div>
-    </div>
-
-    <script>
-        const maxChannels = )" + String(_maxChannels) + R"(;
-        let ws;
-        let states = {};
-
-        function initWebSocket() {
-            ws = new WebSocket('ws://' + window.location.hostname + '/ws');
-            
-            ws.onopen = function() {
-                document.getElementById('wsStatus').className = 'connection-status connected';
-                document.getElementById('wsStatus').innerHTML = '✅ Connected';
-            };
-            
-            ws.onclose = function() {
-                document.getElementById('wsStatus').className = 'connection-status disconnected';
-                document.getElementById('wsStatus').innerHTML = '⚠️ Disconnected - Reconnecting...';
-                setTimeout(initWebSocket, 2000);
-            };
-            
-            ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.channels) {
-                    states = data.channels;
-                    updateUI();
-                } else if (data.channel !== undefined) {
-                    states[data.channel] = data.state;
-                    updateButton(data.channel, data.state);
-                }
-            };
-        }
-
-        function toggleOutput(channel) {
-            const newState = !states[channel];
-            fetch('/api/output?channel=' + channel + '&state=' + (newState ? 1 : 0), {
-                method: 'POST'
-            }).then(response => response.json())
-              .then(data => {
-                  if (data.success) {
-                      states[channel] = data.state;
-                      updateButton(channel, data.state);
-                  }
-              });
-        }
-
-        function updateButton(channel, state) {
-            const btn = document.getElementById('btn-' + channel);
-            if (btn) {
-                btn.className = 'toggle-btn ' + (state ? 'on' : 'off');
-                btn.textContent = state ? 'ON' : 'OFF';
-            }
-        }
-
-        function updateUI() {
-            const container = document.getElementById("channels");
-            container.innerHTML = "";
-            
-            for (let i = 0; i < maxChannels; i++) {
-                const state = states[i] || false;
-                const div = document.createElement("div");
-                div.className = "channel";
-                div.innerHTML = 
-                    "<div class=\"channel-name\">Channel " + i + "</div>" +
-                    "<button id=\"btn-" + i + "\" class=\"toggle-btn " + (state ? "on" : "off") + "\" " +
-                            "onclick=\"toggleOutput(" + i + ")\">" +
-                        (state ? "ON" : "OFF") +
-                    "</button>";
-                container.appendChild(div);
-            }
-        }
-
-        // Initialize
-        initWebSocket();
-        fetch("/api/states")
-            .then(response => response.json())
-            .then(data => {
-                states = data.channels || {};
-                updateUI();
-            });
-    </script>
-</body>
-</html>
-)";
-  
-  return html;
 }
