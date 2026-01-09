@@ -41,8 +41,24 @@ bool ShiftRegisterDriver::init() {
     digitalWrite(dataPin, LOW);
     digitalWrite(clockPin, LOW);
     
-    Serial.printf("✓ ShiftRegisterDriver initialisiert: %s\n", getName());
-    Serial.printf("  - DATA=%d, CLOCK=%d", dataPin, clockPin);
+    // Small delay for hardware stabilization
+    delayMicroseconds(10);
+    
+    // Clear shift register with all HIGH (for ACTIVE_LOW relays = all OFF)
+    // This ensures defined state at startup before LatchController sets actual values
+    for (int i = 0; i < 8; i++) {
+        digitalWrite(dataPin, HIGH);  // HIGH = Relay OFF for ACTIVE_LOW
+        digitalWrite(clockPin, HIGH);
+        digitalWrite(clockPin, LOW);
+    }
+    if (latchPin != 0xFF) {
+        digitalWrite(latchPin, HIGH);
+        delayMicroseconds(1);
+        digitalWrite(latchPin, LOW);
+    }
+    
+    Serial.printf("[ShiftRegister] Initialized: %s\n", getName());
+    Serial.printf("  DATA=%d, CLOCK=%d", dataPin, clockPin);
     if (latchPin != 0xFF) Serial.printf(", LATCH=%d", latchPin);
     if (oePin != 0xFF) Serial.printf(", OE=%d", oePin);
     Serial.println();

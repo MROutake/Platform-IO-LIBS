@@ -103,14 +103,16 @@ bool LatchController::setLatch(uint8_t channel, bool state) {
 }
 
 bool LatchController::setLatchOn(uint8_t channel) {
-    // Logical ON = state true
-    // Hardware inversion is handled in setLatch()
+    // setLatchOn = Relais physisch AN schalten
+    // Bei ACTIVE_LOW: Ausgang muss LOW sein → interner State = true (wird invertiert zu LOW)
+    // Bei ACTIVE_HIGH: Ausgang muss HIGH sein → interner State = true
     return setLatch(channel, true);
 }
 
 bool LatchController::setLatchOff(uint8_t channel) {
-    // Logical OFF = state false
-    // Hardware inversion is handled in setLatch()
+    // setLatchOff = Relais physisch AUS schalten
+    // Bei ACTIVE_LOW: Ausgang muss HIGH sein → interner State = false (wird invertiert zu HIGH)
+    // Bei ACTIVE_HIGH: Ausgang muss LOW sein → interner State = false
     return setLatch(channel, false);
 }
 
