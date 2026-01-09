@@ -1,0 +1,19 @@
+{
+  "name": "ESP32_RelayController",
+  "version": "1.0.0",
+  "description": "Thread-safe ESP32 library for controlling 8 relays via 74HC595 shift register with FreeRTOS support",
+  "keywords": ["esp32", "relay", "74hc595", "shift-register", "freertos", "multicore"],
+  "authors": [
+    {
+      "name": "Theo",
+      "maintainer": true
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/Platform_IO_Libs.git"
+  },
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}
